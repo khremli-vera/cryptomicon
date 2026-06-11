@@ -1,28 +1,49 @@
 <script setup>
 import { ref } from 'vue'
 const ticker = ref('')
-const tickers = ref([
-  { name: 'demo', price: '-' },
-  { name: 'dtc', price: '-' },
-])
+const tickers = ref([])
 const sel = ref(null)
+const graph = ref([])
 
 function add() {
-  const newTicker = { name: ticker.value, price: '-' }
-  tickers.value.push(newTicker)
+  const currentTicker = { name: ticker.value, price: '-' }
+  tickers.value.push(currentTicker)
   setInterval(async () => {
     const f = await fetch(
-      'https://api.coingecko.com/api/v3/simple/price?vs_currencies=usd&ids=bitcoin&x_cg_demo_api_key=CG-seJDVFWS9ik72wiBKQnRdrCL',
+      `https://api.coingecko.com/api/v3/simple/price?vs_currencies=usd&ids=${currentTicker.name}&x_cg_demo_api_key=CG-seJDVFWS9ik72wiBKQnRdrCL`,
     )
     const data = await f.json()
-    console.log(data)
-  }, 10000)
+    tickers.value.find((t) => t.name === currentTicker.name).price =
+      data[currentTicker.name].usd > 1
+        ? data[currentTicker.name].usd.toFixed(2)
+        : data[currentTicker.name].usd.toPrecision(2)
+
+    if (sel.value?.name === currentTicker.name) {
+      graph.value.push(data[currentTicker.name].usd)
+    }
+  }, 5000)
 
   ticker.value = ''
 }
 
 function handleDelete(tickerToRemove) {
   tickers.value = tickers.value.filter((t) => t !== tickerToRemove)
+}
+
+function normalizeGraph() {
+  const maxValue = Math.max(...graph.value)
+  const minValue = Math.min(...graph.value)
+
+  if (maxValue === minValue) {
+    return graph.value.map(() => 50)
+  }
+
+  return graph.value.map((price) => 5 + ((price - minValue) * 95) / (maxValue - minValue))
+}
+
+function select(t) {
+  sel.value = t
+  graph.value = []
 }
 </script>
 
@@ -120,7 +141,7 @@ function handleDelete(tickerToRemove) {
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
             v-for="t of tickers"
-            @click="sel = t"
+            @click="select(t)"
             :key="t.name"
             :class="{ 'border-4': sel === t }"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
@@ -153,12 +174,16 @@ function handleDelete(tickerToRemove) {
         <hr class="w-full border-t border-gray-600 my-4" />
       </template>
       <section v-if="sel" class="relative">
-        <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">{{ sel.name }} - USD</h3>
+        <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
+          {{ sel.name }} - USD {{ normalizeGraph() }}
+        </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
-          <div class="bg-purple-800 border w-10 h-24"></div>
-          <div class="bg-purple-800 border w-10 h-32"></div>
-          <div class="bg-purple-800 border w-10 h-48"></div>
-          <div class="bg-purple-800 border w-10 h-16"></div>
+          <div
+            v-for="(bar, idx) in normalizeGraph()"
+            class="bg-purple-800 border w-10"
+            :key="idx"
+            :style="{ height: `${bar}%` }"
+          ></div>
         </div>
         <button @click="sel = null" type="button" class="absolute top-0 right-0">
           <svg
